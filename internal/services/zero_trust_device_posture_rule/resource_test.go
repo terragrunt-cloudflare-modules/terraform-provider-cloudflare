@@ -123,6 +123,38 @@ func TestAccCloudflareDevicePostureRule_OsVersion(t *testing.T) {
 	})
 }
 
+// TestAccCloudflareDevicePostureRule_NoDescription_NoPhantomDiff is a
+// regression test for the phantom update-in-place diff that previously
+// surfaced whenever a posture rule omitted `description` from
+// configuration. With the attribute declared as Optional+Computed, the
+// plugin framework injected `(known after apply)` on every plan after
+// the initial apply, even though no field actually changed. Dropping
+// the Computed flag fixes the issue; this test pins the behavior by
+// asserting an empty plan post-apply when `description` is unset.
+func TestAccCloudflareDevicePostureRule_NoDescription_NoPhantomDiff(t *testing.T) {
+	rnd := utils.GenerateRandomResourceName()
+	resourceName := fmt.Sprintf("cloudflare_zero_trust_device_posture_rule.%s", rnd)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: acctest.TestAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCloudflareDevicePostureRuleConfigNoDescription(rnd, accountID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(resourceName, tfjsonpath.New("name"), knownvalue.StringExact(rnd)),
+					statecheck.ExpectKnownValue(resourceName, tfjsonpath.New("type"), knownvalue.StringExact("os_version")),
+				},
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PostApplyPostRefresh: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
 func TestAccCloudflareDevicePostureRule_OsVersionExtra(t *testing.T) {
 	// Temporarily unset CLOUDFLARE_API_TOKEN if it is set as the Access
 	// service does not yet support the API tokens and it results in
@@ -389,6 +421,10 @@ func testAccCloudflareDevicePostureRuleConfigDiskEncryptionCheckDisks(rnd, accou
 
 func testAccCloudflareDevicePostureRuleConfigFirewall(rnd, accountID string) string {
 	return acctest.LoadTestCase("devicepostureruleconfigfirewall.tf", rnd, accountID)
+}
+
+func testAccCloudflareDevicePostureRuleConfigNoDescription(rnd, accountID string) string {
+	return acctest.LoadTestCase("devicepostureruleconfignodescription.tf", rnd, accountID)
 }
 
 // Test for File posture rule type

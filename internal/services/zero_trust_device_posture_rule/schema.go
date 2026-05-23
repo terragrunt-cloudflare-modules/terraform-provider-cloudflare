@@ -74,7 +74,6 @@ func ResourceSchema(ctx context.Context) schema.Schema {
 			"description": schema.StringAttribute{
 				Description: "The description of the device posture rule.",
 				Optional:    true,
-				Computed:    true,
 			},
 			"expiration": schema.StringAttribute{
 				Description: "Sets the expiration time for a posture check result. If empty, the result remains valid until it is overwritten by new data from the WARP client.",

@@ -140,13 +140,22 @@ func TestAccCloudflareDevicePostureRule_NoDescription_NoPhantomDiff(t *testing.T
 		ProtoV6ProviderFactories: acctest.TestAccProtoV6ProviderFactories,
 		Steps: []resource.TestStep{
 			{
+				// Create the rule.
 				Config: testAccCloudflareDevicePostureRuleConfigNoDescription(rnd, accountID),
 				ConfigStateChecks: []statecheck.StateCheck{
 					statecheck.ExpectKnownValue(resourceName, tfjsonpath.New("name"), knownvalue.StringExact(rnd)),
-					statecheck.ExpectKnownValue(resourceName, tfjsonpath.New("type"), knownvalue.StringExact("os_version")),
+					statecheck.ExpectKnownValue(resourceName, tfjsonpath.New("type"), knownvalue.StringExact("gateway")),
 				},
+			},
+			{
+				// Re-applying the same config must not propose any change.
+				// Without the UseStateForUnknown plan modifier on
+				// `description`, the framework rewrites the null
+				// configuration value to `(known after apply)` and the
+				// plan reports a phantom update-in-place.
+				Config: testAccCloudflareDevicePostureRuleConfigNoDescription(rnd, accountID),
 				ConfigPlanChecks: resource.ConfigPlanChecks{
-					PostApplyPostRefresh: []plancheck.PlanCheck{
+					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
 				},

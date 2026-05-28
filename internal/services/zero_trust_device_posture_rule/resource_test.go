@@ -164,6 +164,47 @@ func TestAccCloudflareDevicePostureRule_NoDescription_NoPhantomDiff(t *testing.T
 	})
 }
 
+// TestAccCloudflareDevicePostureRule_EmptyDescription_NoPhantomDiff is a
+// regression test for the phantom update-in-place diff that surfaces when a
+// posture rule sets `description = ""` explicitly (e.g. a Terragrunt module
+// that defaults an unset value to the empty string). The Cloudflare API is
+// inconsistent for posture rules: it returns "" for some rule types (e.g.
+// os_version) and omits the field entirely (→ null) for others (e.g.
+// gateway/warp). Without normalization the provider's refresh value
+// disagrees with the prior state ("produced an unexpected new value during
+// refresh"), and every subsequent plan reports a hidden update-in-place.
+// The fix canonicalizes `description` to "" on every state write
+// (normalizeDescription in resource.go), making refresh stable. This test
+// pins an empty plan post-apply for an explicit empty-string configuration.
+func TestAccCloudflareDevicePostureRule_EmptyDescription_NoPhantomDiff(t *testing.T) {
+	rnd := utils.GenerateRandomResourceName()
+	resourceName := fmt.Sprintf("cloudflare_zero_trust_device_posture_rule.%s", rnd)
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:                 func() { acctest.TestAccPreCheck(t) },
+		ProtoV6ProviderFactories: acctest.TestAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccCloudflareDevicePostureRuleConfigEmptyDescription(rnd, accountID),
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue(resourceName, tfjsonpath.New("name"), knownvalue.StringExact(rnd)),
+					statecheck.ExpectKnownValue(resourceName, tfjsonpath.New("type"), knownvalue.StringExact("gateway")),
+					statecheck.ExpectKnownValue(resourceName, tfjsonpath.New("description"), knownvalue.StringExact("")),
+				},
+			},
+			{
+				// Re-applying `description = ""` must not propose any change.
+				Config: testAccCloudflareDevicePostureRuleConfigEmptyDescription(rnd, accountID),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectEmptyPlan(),
+					},
+				},
+			},
+		},
+	})
+}
+
 func TestAccCloudflareDevicePostureRule_OsVersionExtra(t *testing.T) {
 	// Temporarily unset CLOUDFLARE_API_TOKEN if it is set as the Access
 	// service does not yet support the API tokens and it results in
@@ -434,6 +475,10 @@ func testAccCloudflareDevicePostureRuleConfigFirewall(rnd, accountID string) str
 
 func testAccCloudflareDevicePostureRuleConfigNoDescription(rnd, accountID string) string {
 	return acctest.LoadTestCase("devicepostureruleconfignodescription.tf", rnd, accountID)
+}
+
+func testAccCloudflareDevicePostureRuleConfigEmptyDescription(rnd, accountID string) string {
+	return acctest.LoadTestCase("devicepostureruleconfigemptydescription.tf", rnd, accountID)
 }
 
 // Test for File posture rule type

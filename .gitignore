@@ -2,6 +2,7 @@
 .stdy.log
 dist/
 terraform-provider-cloudflare
+terraform-provider-cloudflare_v*
 go.work*
 .DS_Store
 .idea/

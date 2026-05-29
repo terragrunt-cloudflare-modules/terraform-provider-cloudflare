@@ -181,6 +181,13 @@ func (r *ZeroTrustAccessAIControlsMcpPortalResource) Read(ctx context.Context, r
 	}
 	data = &env.Result
 
+	// API returns servers[].id; schema/write path use server_id. apijson cannot
+	// map the differing read key (field is also no_refresh), so re-derive it.
+	reconcilePortalServerIDs(ctx, data, bytes, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
+
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
 
@@ -250,6 +257,13 @@ func (r *ZeroTrustAccessAIControlsMcpPortalResource) ImportState(ctx context.Con
 		return
 	}
 	data = &env.Result
+
+	// API returns servers[].id; schema/write path use server_id. apijson cannot
+	// map the differing read key (field is also no_refresh), so re-derive it.
+	reconcilePortalServerIDs(ctx, data, bytes, &resp.Diagnostics)
+	if resp.Diagnostics.HasError() {
+		return
+	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

@@ -15,5 +15,127 @@
         "cmd/migrate/ast/wrappers.go"
       ]
     }
-  }
+  },
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(gh pr *)",
+      "Bash(gh issue *)",
+      "Bash(gh api repos/*)",
+      "Bash(npm run *)",
+      "Bash(npm test*)",
+      "Bash(npm ci*)",
+      "Bash(npm install*)",
+      "Bash(pnpm *)",
+      "Bash(yarn *)",
+      "Bash(bun *)",
+      "Bash(pytest *)",
+      "Bash(go test *)",
+      "Bash(cargo test *)",
+      "Bash(./gradlew *)",
+      "Bash(mvn *)",
+      "Bash(rg *)",
+      "Bash(find *)",
+      "Bash(jq *)",
+      "Bash(grep *)",
+      "Bash(sed *)",
+      "Bash(awk *)",
+      "Bash(wc *)",
+      "Bash(echo *)",
+      "Bash(printf *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(diff *)",
+      "Bash(which *)",
+      "Bash(java -version*)",
+      "Bash(python3 *)",
+      "Bash(source ~/.sdkman/*)",
+      "Bash(sdk use *)",
+      "Bash(sdk home *)",
+      "Bash(sdk current *)",
+      "Bash(export *)",
+      "Bash(chmod +x *)",
+      "Bash(timeout *)",
+      "Bash(test -f *)",
+      "Bash(test -d *)",
+      "Bash(test -e *)",
+      "Bash(mkdir -p specs/*)",
+      "Bash(git worktree *)",
+      "Bash(bash scripts/*)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(rm -rf*)",
+      "Bash(*prod*)",
+      "Bash(*migrate*prod*)",
+      "Bash(cat .env*)",
+      "Bash(cat *secrets*)",
+      "Bash(*kubectl*delete*)",
+      "Bash(*terraform*destroy*)",
+      "Bash(*gcloud*delete*)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/update-context.sh"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/snapshot-state.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "build|bug-fixer|simplifier-engineer",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/run-tests-on-stop.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/validate-trailers-post-commit.sh"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/hooks/anti-prompt-capture.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "env": {
+    "HARNESS_AUTOTEST": "0",
+    "ANTI_PROMPT_THRESHOLD": "2",
+    "HARNESS_AUTO_UPDATE": "1"
+  },
+  "defaultMode": "acceptEdits"
 }

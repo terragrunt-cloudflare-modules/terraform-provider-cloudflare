@@ -7,3 +7,9 @@ go.work*
 .DS_Store
 .idea/
 bin/
+
+# Local Claude Code harness artifacts (machine-generated, not for upstream)
+.claude/hooks/
+.claude/context.json
+.claude/.harness-plugin-version
+krip-*.jsonl

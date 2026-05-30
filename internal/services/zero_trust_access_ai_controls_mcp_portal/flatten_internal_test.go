@@ -1,82 +1,75 @@
 package zero_trust_access_ai_controls_mcp_portal
 
 import (
-	"context"
+	"encoding/json"
 	"testing"
-
-	"github.com/cloudflare/terraform-provider-cloudflare/internal/customfield"
-	"github.com/hashicorp/terraform-plugin-framework/diag"
-	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
-// TestReconcilePortalServerIDs verifies the Read-path fix that re-derives each
-// servers[].server_id from the API response "id" key (the portal API returns
-// identity under "id"; the schema/write path use "server_id", and the model
-// field is no_refresh, so the unmarshal leaves server_id null). The fix maps
-// response id -> server_id by position, since the decoded servers list
-// preserves response order.
-func TestReconcilePortalServerIDs(t *testing.T) {
-	ctx := context.Background()
-
-	mkData := func(n int) *ZeroTrustAccessAIControlsMcpPortalModel {
-		servers := make([]ZeroTrustAccessAIControlsMcpPortalServersModel, n)
-		for i := range servers {
-			// server_id intentionally left null, mirroring post-unmarshal state.
-			servers[i] = ZeroTrustAccessAIControlsMcpPortalServersModel{
-				ServerID:        types.StringNull(),
-				DefaultDisabled: types.BoolValue(false),
-				OnBehalf:        types.BoolValue(false),
+// TestInjectServerIDs verifies the Read/Create/Update/Import fix that copies
+// each servers[].id into servers[].server_id in the raw response before
+// unmarshal. The portal API returns identity under "id"; the schema/write path
+// use "server_id". Injecting the key lets apijson populate server_id natively
+// (required so the servers set is keyed/built correctly rather than collapsing
+// elements that differ only by the null server_id).
+func TestInjectServerIDs(t *testing.T) {
+	serverIDs := func(body []byte) []string {
+		var env struct {
+			Result struct {
+				Servers []map[string]any `json:"servers"`
+			} `json:"result"`
+		}
+		if err := json.Unmarshal(body, &env); err != nil {
+			t.Fatalf("unmarshal result: %v", err)
+		}
+		out := make([]string, 0, len(env.Result.Servers))
+		for _, s := range env.Result.Servers {
+			if v, ok := s["server_id"].(string); ok {
+				out = append(out, v)
+			} else {
+				out = append(out, "<none>")
 			}
 		}
-		return &ZeroTrustAccessAIControlsMcpPortalModel{
-			Servers: customfield.NewObjectListMust(ctx, servers),
-		}
+		return out
 	}
 
-	t.Run("populates server_id from response id by position", func(t *testing.T) {
-		data := mkData(2)
-		body := []byte(`{"result":{"id":"portal-1","servers":[{"id":"alpha","name":"A"},{"id":"beta","name":"B"}]}}`)
-		var diags diag.Diagnostics
-		reconcilePortalServerIDs(ctx, data, body, &diags)
-		if diags.HasError() {
-			t.Fatalf("unexpected diagnostics: %v", diags)
-		}
-		got, d := data.Servers.AsStructSliceT(ctx)
-		if d.HasError() {
-			t.Fatalf("AsStructSliceT: %v", d)
-		}
+	t.Run("injects server_id from id, preserves order", func(t *testing.T) {
+		in := []byte(`{"result":{"id":"p","servers":[{"id":"alpha","name":"A"},{"id":"beta","name":"B"}]}}`)
+		got := serverIDs(injectServerIDs(in))
 		want := []string{"alpha", "beta"}
-		for i, w := range want {
-			if got[i].ServerID.ValueString() != w {
-				t.Errorf("servers[%d].server_id = %q, want %q", i, got[i].ServerID.ValueString(), w)
+		for i := range want {
+			if got[i] != want[i] {
+				t.Errorf("servers[%d].server_id = %q, want %q", i, got[i], want[i])
 			}
 		}
 	})
 
-	t.Run("null servers list is a no-op", func(t *testing.T) {
-		data := &ZeroTrustAccessAIControlsMcpPortalModel{
-			Servers: customfield.NullObjectList[ZeroTrustAccessAIControlsMcpPortalServersModel](ctx),
-		}
-		var diags diag.Diagnostics
-		reconcilePortalServerIDs(ctx, data, []byte(`{"result":{"servers":[]}}`), &diags)
-		if diags.HasError() {
-			t.Fatalf("unexpected diagnostics: %v", diags)
-		}
-		if !data.Servers.IsNull() {
-			t.Errorf("expected servers to remain null")
+	t.Run("does not clobber an existing server_id", func(t *testing.T) {
+		in := []byte(`{"result":{"id":"p","servers":[{"id":"alpha","server_id":"explicit"}]}}`)
+		got := serverIDs(injectServerIDs(in))
+		if got[0] != "explicit" {
+			t.Errorf("server_id = %q, want %q (must not overwrite)", got[0], "explicit")
 		}
 	})
 
-	t.Run("unparseable body leaves state untouched", func(t *testing.T) {
-		data := mkData(1)
-		var diags diag.Diagnostics
-		reconcilePortalServerIDs(ctx, data, []byte(`not json`), &diags)
-		if diags.HasError() {
-			t.Fatalf("unexpected diagnostics: %v", diags)
+	t.Run("no servers key -> unchanged", func(t *testing.T) {
+		in := []byte(`{"result":{"id":"p","name":"x"}}`)
+		if string(injectServerIDs(in)) != string(in) {
+			t.Errorf("expected unchanged body")
 		}
-		got, _ := data.Servers.AsStructSliceT(ctx)
-		if !got[0].ServerID.IsNull() {
-			t.Errorf("server_id should stay null on unparseable body, got %q", got[0].ServerID.ValueString())
+	})
+
+	t.Run("unparseable -> unchanged", func(t *testing.T) {
+		in := []byte(`not json`)
+		if string(injectServerIDs(in)) != string(in) {
+			t.Errorf("expected unchanged body on parse error")
+		}
+	})
+
+	t.Run("server with no id -> left without server_id", func(t *testing.T) {
+		in := []byte(`{"result":{"servers":[{"name":"A"}]}}`)
+		got := serverIDs(injectServerIDs(in))
+		if got[0] != "<none>" {
+			t.Errorf("expected no server_id injected when id absent, got %q", got[0])
 		}
 	})
 }

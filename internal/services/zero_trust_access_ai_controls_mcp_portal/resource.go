@@ -85,6 +85,9 @@ func (r *ZeroTrustAccessAIControlsMcpPortalResource) Create(ctx context.Context,
 		return
 	}
 	bytes, _ := io.ReadAll(res.Body)
+	// Map each servers[].id -> servers[].server_id before unmarshal so apijson
+	// populates server_id (response uses "id"; schema/write use "server_id").
+	bytes = injectServerIDs(bytes)
 	err = apijson.UnmarshalComputed(bytes, &env)
 	if err != nil {
 		resp.Diagnostics.AddError("failed to deserialize http request", err.Error())
@@ -134,6 +137,9 @@ func (r *ZeroTrustAccessAIControlsMcpPortalResource) Update(ctx context.Context,
 		return
 	}
 	bytes, _ := io.ReadAll(res.Body)
+	// Map each servers[].id -> servers[].server_id before unmarshal so apijson
+	// populates server_id (response uses "id"; schema/write use "server_id").
+	bytes = injectServerIDs(bytes)
 	err = apijson.UnmarshalComputed(bytes, &env)
 	if err != nil {
 		resp.Diagnostics.AddError("failed to deserialize http request", err.Error())
@@ -174,19 +180,15 @@ func (r *ZeroTrustAccessAIControlsMcpPortalResource) Read(ctx context.Context, r
 		return
 	}
 	bytes, _ := io.ReadAll(res.Body)
+	// Map each servers[].id -> servers[].server_id before unmarshal so apijson
+	// populates server_id (response uses "id"; schema/write use "server_id").
+	bytes = injectServerIDs(bytes)
 	err = apijson.Unmarshal(bytes, &env)
 	if err != nil {
 		resp.Diagnostics.AddError("failed to deserialize http request", err.Error())
 		return
 	}
 	data = &env.Result
-
-	// API returns servers[].id; schema/write path use server_id. apijson cannot
-	// map the differing read key (field is also no_refresh), so re-derive it.
-	reconcilePortalServerIDs(ctx, data, bytes, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }
@@ -251,19 +253,15 @@ func (r *ZeroTrustAccessAIControlsMcpPortalResource) ImportState(ctx context.Con
 		return
 	}
 	bytes, _ := io.ReadAll(res.Body)
+	// Map each servers[].id -> servers[].server_id before unmarshal so apijson
+	// populates server_id (response uses "id"; schema/write use "server_id").
+	bytes = injectServerIDs(bytes)
 	err = apijson.Unmarshal(bytes, &env)
 	if err != nil {
 		resp.Diagnostics.AddError("failed to deserialize http request", err.Error())
 		return
 	}
 	data = &env.Result
-
-	// API returns servers[].id; schema/write path use server_id. apijson cannot
-	// map the differing read key (field is also no_refresh), so re-derive it.
-	reconcilePortalServerIDs(ctx, data, bytes, &resp.Diagnostics)
-	if resp.Diagnostics.HasError() {
-		return
-	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &data)...)
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/booldefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringdefault"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
 )
 
@@ -35,7 +36,12 @@ func ResourceSchema(ctx context.Context) schema.Schema {
 				Required: true,
 			},
 			"description": schema.StringAttribute{
+				Computed: true,
 				Optional: true,
+				// API persists an unset description as "" (never null). Default
+				// to "" so an omitted (null) config value matches API state
+				// instead of producing a perpetual update-in-place.
+				Default: stringdefault.StaticString(""),
 			},
 			"allow_code_mode": schema.BoolAttribute{
 				Description: "Allow remote code execution in Dynamic Workers (beta)",
@@ -49,10 +55,10 @@ func ResourceSchema(ctx context.Context) schema.Schema {
 				Optional:    true,
 				Default:     booldefault.StaticBool(false),
 			},
-			"servers": schema.ListNestedAttribute{
+			"servers": schema.SetNestedAttribute{
 				Computed:   true,
 				Optional:   true,
-				CustomType: customfield.NewNestedObjectListType[ZeroTrustAccessAIControlsMcpPortalServersModel](ctx),
+				CustomType: customfield.NewNestedObjectSetType[ZeroTrustAccessAIControlsMcpPortalServersModel](ctx),
 				NestedObject: schema.NestedAttributeObject{
 					Attributes: map[string]schema.Attribute{
 						"server_id": schema.StringAttribute{
@@ -113,9 +119,13 @@ func ResourceSchema(ctx context.Context) schema.Schema {
 			"created_at": schema.StringAttribute{
 				Computed:   true,
 				CustomType: timetypes.RFC3339Type{},
+				// Immutable creation metadata: hold the stored value on update
+				// instead of going (known after apply).
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"created_by": schema.StringAttribute{
-				Computed: true,
+				Computed:      true,
+				PlanModifiers: []planmodifier.String{stringplanmodifier.UseStateForUnknown()},
 			},
 			"modified_at": schema.StringAttribute{
 				Computed:   true,
